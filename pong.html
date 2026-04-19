@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Pong — Multiplayer</title>
+  <style>
+    :root{--cyan:#00ddff;--red:#ff4466;--bg:#07070e;--panel:#0d0d1c;--border:#1a1a30;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:#b0b0cc;font-family:'Courier New',Courier,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px;gap:20px;}
+    .hub-link{align-self:flex-start;color:#3a3a58;font-size:.75em;letter-spacing:2px;text-decoration:none;padding:6px 10px;border:1px solid #1a1a30;border-radius:4px;transition:color .15s,border-color .15s;}
+    .hub-link:hover{color:var(--cyan);border-color:var(--cyan);}
+    h1{font-size:clamp(1.8em,5vw,2.8em);color:var(--cyan);text-shadow:0 0 24px rgba(0,221,255,.45);letter-spacing:6px;}
+    .sub{font-size:.75em;color:#3a3a58;letter-spacing:3px;margin-top:-14px;}
+    .screen{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;max-width:480px;}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:22px;width:100%;}
+    .card h2{font-size:.8em;letter-spacing:3px;color:#3a3a58;margin-bottom:14px;}
+    .btn{background:transparent;border:2px solid var(--cyan);color:var(--cyan);padding:11px 26px;font-family:inherit;font-size:.9em;letter-spacing:2px;cursor:pointer;border-radius:5px;transition:background .15s,box-shadow .15s;}
+    .btn:hover:not(:disabled){background:rgba(0,221,255,.1);box-shadow:0 0 14px rgba(0,221,255,.3);}
+    .btn:disabled{opacity:.35;cursor:default;}
+    .btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+    .inp{background:rgba(255,255,255,.04);border:1px solid var(--border);color:#fff;padding:10px 14px;font-family:inherit;font-size:1.1em;border-radius:5px;width:100%;text-align:center;letter-spacing:4px;text-transform:uppercase;}
+    .inp:focus{outline:none;border-color:var(--cyan);}
+    .room-code{font-size:2.2em;color:var(--cyan);letter-spacing:10px;padding:16px;text-align:center;background:rgba(0,221,255,.04);border:1px dashed rgba(0,221,255,.25);border-radius:6px;cursor:pointer;user-select:all;transition:background .15s;}
+    .room-code:hover{background:rgba(0,221,255,.09);}
+    .st{font-size:.78em;text-align:center;color:#444;min-height:1.2em;}
+    .st.ok{color:var(--cyan);}
+    .st.err{color:var(--red);}
+    .pl-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.02);border-radius:5px;font-size:.85em;}
+    .pl-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+    .pl-you{margin-left:auto;color:#333;font-size:.75em;}
+    #game-layout{display:none;flex-direction:column;align-items:center;gap:12px;}
+    #gameCanvas{display:block;border:2px solid var(--border);border-radius:4px;max-width:100%;}
+    #hint{font-size:.7em;color:#2a2a44;text-align:center;}
+    /* touch paddle controls */
+    #touch-controls{display:none;gap:12px;}
+    .tc-btn{background:rgba(0,221,255,.07);border:2px solid rgba(0,221,255,.2);color:var(--cyan);font-size:1.6em;border-radius:6px;cursor:pointer;padding:14px 28px;user-select:none;-webkit-user-select:none;}
+    .tc-btn:active{background:rgba(0,221,255,.2);}
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:50;}
+    .ov-box{background:var(--panel);border:2px solid var(--cyan);border-radius:10px;padding:40px 50px;text-align:center;box-shadow:0 0 50px rgba(0,221,255,.2);}
+    .ov-box h2{font-size:2em;color:var(--cyan);margin-bottom:10px;}
+    .ov-winner{font-size:1.4em;margin:10px 0 20px;}
+    #notif{position:fixed;top:18px;right:18px;padding:10px 18px;background:var(--panel);border:1px solid var(--cyan);border-radius:5px;font-size:.8em;opacity:0;transition:opacity .25s;pointer-events:none;z-index:100;}
+    #notif.show{opacity:1;}
+    .how{font-size:.8em;line-height:1.9;color:#444;}
+    .how span{color:#666;}
+  </style>
+</head>
+<body>
+
+<a href="index.html" class="hub-link">← GAME HUB</a>
+<h1>PONG</h1>
+<p class="sub">2 PLAYERS · CLASSIC PADDLE BATTLE</p>
+
+<div id="notif"></div>
+
+<div id="s-main" class="screen">
+  <div class="card">
+    <h2>PLAY</h2>
+    <div class="btn-row">
+      <button class="btn" id="btn-host">HOST GAME</button>
+      <button class="btn" id="btn-join-toggle">JOIN GAME</button>
+    </div>
+  </div>
+  <div class="card" id="join-panel" style="display:none">
+    <h2>JOIN GAME</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input class="inp" id="inp-code" type="text" placeholder="ROOM CODE" maxlength="8" autocomplete="off"/>
+      <button class="btn" id="btn-join">CONNECT</button>
+      <p class="st" id="st-join"></p>
+    </div>
+  </div>
+  <div class="card">
+    <h2>HOW TO PLAY</h2>
+    <p class="how">
+      <span>HOST</span> controls the left paddle · <span>GUEST</span> controls the right<br>
+      <span>W / S</span> or <span>↑ / ↓</span> to move your paddle<br>
+      First to <span>7 points</span> wins the match<br>
+      Ball speeds up with every hit — keep your eye on it!<br><br>
+      Touch controls appear automatically on mobile
+    </p>
+  </div>
+</div>
+
+<div id="s-lobby" class="screen" style="display:none">
+  <div class="card">
+    <h2>ROOM CODE — CLICK TO COPY</h2>
+    <div class="room-code" id="rc-display">------</div>
+    <p class="st" id="st-lobby" style="margin-top:10px">Waiting for opponent…</p>
+  </div>
+  <div class="card">
+    <h2>PLAYERS (<span id="pc">1</span>/2)</h2>
+    <div id="pl-list" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="btn-start" disabled>START GAME</button>
+    <button class="btn" id="btn-leave">LEAVE</button>
+  </div>
+</div>
+
+<div id="game-layout">
+  <canvas id="gameCanvas"></canvas>
+  <div id="touch-controls">
+    <button class="tc-btn" id="tc-up">▲ UP</button>
+    <button class="tc-btn" id="tc-down">▼ DOWN</button>
+  </div>
+  <p id="hint">W/S or Arrow Keys to move your paddle</p>
+  <button class="btn" id="btn-back">BACK TO MENU</button>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+// ── Constants ──
+const CW=700,CH=440,PW=14,PH=90,BR=9,PSPEED=6,WIN=7,TICK=33;
+const LCOL='#00ddff',RCOL='#ff4466';
+
+// ── State ──
+let peer=null,myId=null,isHost=false,hostConn=null,guestConn=null;
+let gameState=null,gameLoop=null,ovShown=false;
+let myPaddleDir=0; // -1 up, 0 still, 1 down
+let keysDown=new Set();
+
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+canvas.width=CW;canvas.height=CH;
+
+// ── UI ──
+function showScreen(n){['s-main','s-lobby','game-layout'].forEach(id=>{document.getElementById(id).style.display=id===n?'flex':'none';});}
+let notifTimer=null;
+function notify(msg){const el=document.getElementById('notif');el.textContent=msg;el.classList.add('show');clearTimeout(notifTimer);notifTimer=setTimeout(()=>el.classList.remove('show'),2600);}
+function setSt(id,msg,cls=''){const el=document.getElementById(id);el.textContent=msg;el.className='st '+cls;}
+function makePeer(id){return new Promise((res,rej)=>{const p=new Peer(id,{debug:0});p.on('open',()=>res(p));p.on('error',rej);});}
+function randCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
+function trySend(c,m){try{c.send(m);}catch(_){}}
+
+function renderLobby(players){
+  const list=document.getElementById('pl-list');list.innerHTML='';
+  const roles=['HOST (LEFT)','GUEST (RIGHT)'];
+  const colors=[LCOL,RCOL];
+  players.forEach((p,i)=>{
+    const d=document.createElement('div');d.className='pl-item';
+    d.innerHTML=`<div class="pl-dot" style="background:${colors[i]}"></div><span style="color:${colors[i]}">${roles[i]||'PLAYER'}</span>${p.peerId===myId?'<span class="pl-you">YOU</span>':''}`;
+    list.appendChild(d);
+  });
+  document.getElementById('pc').textContent=players.length;
+  if(isHost)document.getElementById('btn-start').disabled=players.length<2;
+}
+
+// ── Game Logic ──
+function initState(){
+  return{
+    lPaddle:{y:CH/2-PH/2},
+    rPaddle:{y:CH/2-PH/2},
+    ball:{x:CW/2,y:CH/2,vx:4*(Math.random()<.5?1:-1),vy:(Math.random()-.5)*4},
+    lScore:0,rScore:0,
+    running:true,winner:null,
+    serveDir:1
+  };
+}
+
+function resetBall(state,dir){
+  state.ball.x=CW/2;state.ball.y=CH/2;
+  state.ball.vx=4*dir;
+  state.ball.vy=(Math.random()-.5)*5;
+}
+
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+function tickGame(state,hostDir,guestDir){
+  if(!state.running)return;
+  // Move paddles
+  state.lPaddle.y=clamp(state.lPaddle.y+hostDir*PSPEED,0,CH-PH);
+  state.rPaddle.y=clamp(state.rPaddle.y+guestDir*PSPEED,0,CH-PH);
+  // Move ball
+  state.ball.x+=state.ball.vx;
+  state.ball.y+=state.ball.vy;
+  // Top/bottom bounce
+  if(state.ball.y-BR<=0){state.ball.y=BR;state.ball.vy=Math.abs(state.ball.vy);}
+  if(state.ball.y+BR>=CH){state.ball.y=CH-BR;state.ball.vy=-Math.abs(state.ball.vy);}
+  // Left paddle hit (x = PW+20 from left)
+  const LP=PW+22;
+  if(state.ball.vx<0&&state.ball.x-BR<=LP&&state.ball.x-BR>=LP-8&&
+     state.ball.y>=state.lPaddle.y-BR&&state.ball.y<=state.lPaddle.y+PH+BR){
+    const rel=(state.ball.y-(state.lPaddle.y+PH/2))/(PH/2);
+    const spd=Math.min(Math.sqrt(state.ball.vx**2+state.ball.vy**2)*1.06,16);
+    state.ball.vx=Math.abs(state.ball.vx)*1.06;
+    state.ball.vy=rel*7;
+    state.ball.x=LP+BR;
+  }
+  // Right paddle hit
+  const RP=CW-PW-22;
+  if(state.ball.vx>0&&state.ball.x+BR>=RP&&state.ball.x+BR<=RP+8&&
+     state.ball.y>=state.rPaddle.y-BR&&state.ball.y<=state.rPaddle.y+PH+BR){
+    const rel=(state.ball.y-(state.rPaddle.y+PH/2))/(PH/2);
+    state.ball.vx=-Math.abs(state.ball.vx)*1.06;
+    state.ball.vy=rel*7;
+    state.ball.x=RP-BR;
+  }
+  // Cap speed
+  const spd=Math.sqrt(state.ball.vx**2+state.ball.vy**2);
+  if(spd>16){state.ball.vx=state.ball.vx/spd*16;state.ball.vy=state.ball.vy/spd*16;}
+  // Score
+  if(state.ball.x-BR<=0){state.rScore++;if(state.rScore>=WIN){state.running=false;state.winner='right';}else resetBall(state,1);}
+  if(state.ball.x+BR>=CW){state.lScore++;if(state.lScore>=WIN){state.running=false;state.winner='left';}else resetBall(state,-1);}
+}
+
+// ── Render ──
+function render(state){
+  // BG
+  ctx.fillStyle='#07070e';ctx.fillRect(0,0,CW,CH);
+  // Center line
+  ctx.setLineDash([12,10]);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(CW/2,0);ctx.lineTo(CW/2,CH);ctx.stroke();
+  ctx.setLineDash([]);
+  // Scores
+  ctx.font='bold 52px Courier New';ctx.textAlign='center';
+  ctx.fillStyle=LCOL+'66';ctx.fillText(state.lScore,CW/2-90,70);
+  ctx.fillStyle=RCOL+'66';ctx.fillText(state.rScore,CW/2+90,70);
+  // Player labels
+  ctx.font='11px Courier New';ctx.letterSpacing='2px';
+  ctx.fillStyle=LCOL+'99';ctx.fillText(isHost?'YOU':'HOST',PW+22+PH/2,18);
+  ctx.fillStyle=RCOL+'99';ctx.fillText(isHost?'GUEST':'YOU',CW-PW-22-PH/2,18);
+  ctx.letterSpacing='0';
+  // Left paddle
+  ctx.shadowColor=LCOL;ctx.shadowBlur=16;ctx.fillStyle=LCOL;
+  ctx.fillRect(PW+8,state.lPaddle.y,PW,PH);
+  // Right paddle
+  ctx.shadowColor=RCOL;ctx.fillStyle=RCOL;
+  ctx.fillRect(CW-PW*2-8,state.rPaddle.y,PW,PH);
+  ctx.shadowBlur=0;
+  // Ball
+  ctx.shadowColor='#fff';ctx.shadowBlur=18;ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(state.ball.x,state.ball.y,BR,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  // Win line indicators
+  ctx.font='10px Courier New';ctx.fillStyle='rgba(255,255,255,.15)';
+  ctx.textAlign='left';ctx.fillText(`FIRST TO ${WIN}`,CW/2-34,CH-10);
+}
+
+function showGameOver(state){
+  if(ovShown)return;ovShown=true;
+  setTimeout(()=>{
+    const ov=document.createElement('div');ov.className='overlay';
+    const iWon=(state.winner==='left'&&isHost)||(state.winner==='right'&&!isHost);
+    const color=state.winner==='left'?LCOL:RCOL;
+    const wName=state.winner==='left'?'LEFT (HOST)':'RIGHT (GUEST)';
+    ov.innerHTML=`<div class="ov-box"><h2>GAME OVER</h2><p class="ov-winner" style="color:${color}">${wName} WINS!</p><p style="color:#555;margin-bottom:20px">${iWon?"That's you! 🏆":''}</p><button class="btn" id="btn-again">PLAY AGAIN</button></div>`;
+    document.body.appendChild(ov);
+    document.getElementById('btn-again').onclick=()=>{ov.remove();backToLobby();};
+  },500);
+}
+
+let hostPaddleDir=0,guestPaddleDir=0;
+
+function stopLoop(){if(gameLoop){clearInterval(gameLoop);gameLoop=null;}}
+function backToLobby(){stopLoop();gameState=null;ovShown=false;showScreen('s-lobby');if(isHost){renderLobby([{peerId:myId},{peerId:guestConn?.peer||''}]);;document.getElementById('btn-start').disabled=!guestConn?.open;}}
+
+function startGame(){
+  gameState=initState();ovShown=false;hostPaddleDir=0;guestPaddleDir=0;
+  showScreen('game-layout');
+  if(guestConn)trySend(guestConn,{type:'start',state:gameState});
+  render(gameState);
+  gameLoop=setInterval(()=>{
+    if(!gameState?.running)return;
+    // Get host paddle dir from keys
+    hostPaddleDir=0;
+    if(keysDown.has('ArrowUp')||keysDown.has('w'))hostPaddleDir=-1;
+    if(keysDown.has('ArrowDown')||keysDown.has('s'))hostPaddleDir=1;
+    tickGame(gameState,hostPaddleDir,guestPaddleDir);
+    render(gameState);
+    if(guestConn)trySend(guestConn,{type:'state',state:gameState});
+    if(!gameState.running){stopLoop();showGameOver(gameState);}
+  },TICK);
+}
+
+// ── Input ──
+document.addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','w','s'].includes(e.key)){e.preventDefault();keysDown.add(e.key);}
+  if(!isHost&&hostConn?.open&&gameState){
+    let dir=0;
+    if(e.key==='ArrowUp'||e.key==='w')dir=-1;
+    if(e.key==='ArrowDown'||e.key==='s')dir=1;
+    if(dir)hostConn.send({type:'dir',dir});
+  }
+});
+document.addEventListener('keyup',e=>{keysDown.delete(e.key);if(!isHost&&hostConn?.open&&gameState){if(e.key==='ArrowUp'||e.key==='w'||e.key==='ArrowDown'||e.key==='s')hostConn.send({type:'dir',dir:0});}});
+
+// Touch controls
+let touchInterval=null;
+function startTouch(dir){if(!isHost&&hostConn?.open&&gameState){hostConn.send({type:'dir',dir});}else{keysDown.add(dir===1?'ArrowDown':'ArrowUp');}}
+function endTouch(){if(!isHost&&hostConn?.open&&gameState){hostConn.send({type:'dir',dir:0});}else{keysDown.delete('ArrowUp');keysDown.delete('ArrowDown');}}
+
+['tc-up','tc-down'].forEach(id=>{
+  const btn=document.getElementById(id);const dir=id==='tc-up'?-1:1;
+  btn.addEventListener('touchstart',e=>{e.preventDefault();startTouch(dir);},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();endTouch();},{passive:false});
+  btn.addEventListener('mousedown',()=>startTouch(dir));
+  btn.addEventListener('mouseup',endTouch);
+});
+window.addEventListener('touchstart',()=>document.getElementById('touch-controls').style.display='flex',{once:true});
+
+// ── Host Networking ──
+async function hostGame(){
+  let attempts=0;
+  while(attempts<3){const code=randCode();try{peer=await makePeer(code);break;}catch(err){if(err?.type==='unavailable-id'){attempts++;continue;}notify('Could not connect to relay server.');return;}}
+  if(!peer){notify('Failed to get a room code.');return;}
+  myId=peer.id;isHost=true;guestConn=null;
+  showScreen('s-lobby');document.getElementById('rc-display').textContent=peer.id;
+  setSt('st-lobby','Waiting for opponent…');
+  renderLobby([{peerId:myId}]);
+
+  peer.on('connection',conn=>{
+    if(guestConn){trySend(conn,{type:'full'});conn.close();return;}
+    conn.on('open',()=>{
+      guestConn=conn;
+      renderLobby([{peerId:myId},{peerId:conn.peer}]);
+      document.getElementById('btn-start').disabled=false;
+      notify('Opponent connected!');
+      conn.on('data',data=>{
+        if(data.type==='dir')guestPaddleDir=data.dir;
+      });
+      conn.on('close',()=>{
+        guestConn=null;guestPaddleDir=0;
+        if(gameState)gameState.running=false;
+        renderLobby([{peerId:myId}]);
+        document.getElementById('btn-start').disabled=true;
+        notify('Opponent disconnected');
+        if(ovShown||!gameState)return;
+        backToLobby();
+      });
+    });
+  });
+  peer.on('error',err=>notify('Host error: '+err.message));
+}
+
+// ── Guest Networking ──
+async function joinGame(code){
+  const gid='g'+Math.random().toString(36).substr(2,9);
+  try{peer=await makePeer(gid);}catch(err){setSt('st-join','Peer init failed: '+err.message,'err');return;}
+  myId=peer.id;isHost=false;setSt('st-join','Connecting…');
+  hostConn=peer.connect(code,{reliable:true});
+  const timeout=setTimeout(()=>{if(!hostConn.open)setSt('st-join','Timed out. Check the room code.','err');},10000);
+  hostConn.on('open',()=>{
+    clearTimeout(timeout);setSt('st-join','');showScreen('s-lobby');
+    document.getElementById('rc-display').textContent=code;
+    document.getElementById('btn-start').style.display='none';
+    setSt('st-lobby','Connected! Waiting for host to start…','ok');
+    renderLobby([{peerId:code},{peerId:myId}]);
+  });
+  hostConn.on('data',data=>{
+    if(data.type==='full'){setSt('st-join','Room is full.','err');peer.destroy();return;}
+    if(data.type==='start'){gameState=data.state;ovShown=false;showScreen('game-layout');render(gameState);}
+    else if(data.type==='state'){gameState=data.state;render(gameState);if(!gameState.running&&!ovShown)showGameOver(gameState);}
+  });
+  hostConn.on('close',()=>{notify('Disconnected from host');resetToMain();});
+  hostConn.on('error',e=>setSt('st-join','Error: '+e.message,'err'));
+}
+
+function resetToMain(){
+  stopLoop();gameState=null;ovShown=false;keysDown.clear();
+  if(peer){peer.destroy();peer=null;}
+  hostConn=null;guestConn=null;myId=null;isHost=false;
+  document.getElementById('btn-start').style.display='';document.getElementById('btn-start').disabled=true;
+  document.getElementById('inp-code').value='';setSt('st-join','');showScreen('s-main');
+}
+
+document.getElementById('btn-host').onclick=()=>hostGame();
+document.getElementById('btn-join-toggle').onclick=()=>{const p=document.getElementById('join-panel');p.style.display=p.style.display==='none'?'block':'none';};
+document.getElementById('btn-join').onclick=()=>{const code=document.getElementById('inp-code').value.trim().toUpperCase();if(code.length<4){setSt('st-join','Enter a valid room code','err');return;}joinGame(code);};
+document.getElementById('inp-code').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btn-join').click();});
+document.getElementById('rc-display').onclick=()=>{navigator.clipboard?.writeText(document.getElementById('rc-display').textContent).then(()=>notify('Room code copied!')).catch(()=>{});};
+document.getElementById('btn-start').onclick=()=>startGame();
+document.getElementById('btn-leave').onclick=()=>resetToMain();
+document.getElementById('btn-back').onclick=()=>resetToMain();
+</script>
+</body>
+</html>

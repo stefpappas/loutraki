@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake Battle — Multiplayer</title>
+  <style>
+    :root { --green:#00ff88; --red:#ff4466; --blue:#44aaff; --gold:#ffaa00; --bg:#07070e; --panel:#0d0d1c; --border:#1a1a30; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); color:#b0b0cc; font-family:'Courier New',Courier,monospace; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px 16px; gap:20px; }
+    .hub-link { align-self:flex-start; color:#3a3a58; font-size:.75em; letter-spacing:2px; text-decoration:none; padding:6px 10px; border:1px solid #1a1a30; border-radius:4px; transition:color .15s,border-color .15s; }
+    .hub-link:hover { color:var(--green); border-color:var(--green); }
+    h1 { font-size:clamp(1.8em,5vw,2.8em); color:var(--green); text-shadow:0 0 24px rgba(0,255,136,.45); letter-spacing:6px; }
+    .sub { font-size:.75em; color:#3a3a58; letter-spacing:3px; margin-top:-14px; }
+    .screen { display:flex; flex-direction:column; align-items:center; gap:16px; width:100%; max-width:480px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:22px; width:100%; }
+    .card h2 { font-size:.8em; letter-spacing:3px; color:#3a3a58; margin-bottom:14px; }
+    .btn { background:transparent; border:2px solid var(--green); color:var(--green); padding:11px 26px; font-family:inherit; font-size:.9em; letter-spacing:2px; cursor:pointer; border-radius:5px; transition:background .15s,box-shadow .15s; }
+    .btn:hover:not(:disabled) { background:rgba(0,255,136,.1); box-shadow:0 0 14px rgba(0,255,136,.3); }
+    .btn:disabled { opacity:.35; cursor:default; }
+    .btn-row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+    .inp { background:rgba(255,255,255,.04); border:1px solid var(--border); color:#fff; padding:10px 14px; font-family:inherit; font-size:1.1em; border-radius:5px; width:100%; text-align:center; letter-spacing:4px; text-transform:uppercase; }
+    .inp:focus { outline:none; border-color:var(--green); }
+    .room-code { font-size:2.2em; color:var(--green); letter-spacing:10px; padding:16px; text-align:center; background:rgba(0,255,136,.04); border:1px dashed rgba(0,255,136,.25); border-radius:6px; cursor:pointer; user-select:all; transition:background .15s; }
+    .room-code:hover { background:rgba(0,255,136,.09); }
+    .st { font-size:.78em; text-align:center; color:#444; min-height:1.2em; }
+    .st.ok  { color:var(--green); }
+    .st.err { color:var(--red); }
+    .pl-item { display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,.02); border-radius:5px; font-size:.85em; }
+    .pl-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+    .pl-you { margin-left:auto; color:#333; font-size:.75em; }
+    #game-layout { display:none; flex-direction:column; align-items:center; gap:10px; }
+    #hud { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .sc-card { padding:7px 16px; border:1px solid; border-radius:5px; font-size:.8em; min-width:90px; text-align:center; line-height:1.6; }
+    #gameCanvas { display:block; border:2px solid var(--border); border-radius:4px; image-rendering:pixelated; max-width:100%; }
+    #hint { font-size:.7em; color:#2a2a44; text-align:center; }
+    #dpad { display:none; grid-template-columns:repeat(3,50px); grid-template-rows:repeat(3,50px); gap:4px; }
+    .dp-btn { background:rgba(0,255,136,.07); border:1px solid rgba(0,255,136,.2); color:var(--green); font-size:1.3em; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; }
+    .dp-btn:active { background:rgba(0,255,136,.2); }
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; z-index:50; }
+    .ov-box { background:var(--panel); border:2px solid var(--green); border-radius:10px; padding:40px 50px; text-align:center; box-shadow:0 0 50px rgba(0,255,136,.2); }
+    .ov-box h2 { font-size:2em; color:var(--green); margin-bottom:10px; }
+    .ov-winner { font-size:1.4em; margin:10px 0 20px; }
+    #notif { position:fixed; top:18px; right:18px; padding:10px 18px; background:var(--panel); border:1px solid var(--green); border-radius:5px; font-size:.8em; opacity:0; transition:opacity .25s; pointer-events:none; z-index:100; }
+    #notif.show { opacity:1; }
+    #countdown { position:fixed; inset:0; display:none; align-items:center; justify-content:center; font-size:8em; color:var(--green); text-shadow:0 0 40px var(--green); z-index:40; pointer-events:none; }
+    .how { font-size:.8em; line-height:1.9; color:#444; }
+    .how span { color:#666; }
+  </style>
+</head>
+<body>
+
+<a href="index.html" class="hub-link">← GAME HUB</a>
+<h1>SNAKE BATTLE</h1>
+<p class="sub">MULTIPLAYER · P2P · UP TO 4 PLAYERS</p>
+
+<div id="notif"></div>
+<div id="countdown"></div>
+
+<div id="s-main" class="screen">
+  <div class="card">
+    <h2>PLAY</h2>
+    <div class="btn-row">
+      <button class="btn" id="btn-host">HOST GAME</button>
+      <button class="btn" id="btn-join-toggle">JOIN GAME</button>
+    </div>
+  </div>
+  <div class="card" id="join-panel" style="display:none">
+    <h2>JOIN GAME</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input class="inp" id="inp-code" type="text" placeholder="ROOM CODE" maxlength="8" autocomplete="off" />
+      <button class="btn" id="btn-join">CONNECT</button>
+      <p class="st" id="st-join"></p>
+    </div>
+  </div>
+  <div class="card">
+    <h2>HOW TO PLAY</h2>
+    <p class="how">
+      <span>WASD</span> or <span>Arrow Keys</span> to steer your snake<br>
+      Eat <span style="color:var(--red)">●</span> food to grow longer &amp; score points<br>
+      Avoid walls, your own tail, and other snakes<br>
+      Last snake alive wins the round!<br><br>
+      Host shares the <span>room code</span> — friends paste it in Join
+    </p>
+  </div>
+</div>
+
+<div id="s-lobby" class="screen" style="display:none">
+  <div class="card">
+    <h2>ROOM CODE — CLICK TO COPY</h2>
+    <div class="room-code" id="rc-display">------</div>
+    <p class="st" id="st-lobby" style="margin-top:10px">Waiting for players…</p>
+  </div>
+  <div class="card">
+    <h2>PLAYERS (<span id="pc">1</span>/4)</h2>
+    <div id="pl-list" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="btn-start" disabled>START GAME</button>
+    <button class="btn" id="btn-leave">LEAVE</button>
+  </div>
+</div>
+
+<div id="game-layout">
+  <div id="hud"></div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="dpad">
+    <div></div><div class="dp-btn" data-dir="up">▲</div><div></div>
+    <div class="dp-btn" data-dir="left">◀</div><div></div><div class="dp-btn" data-dir="right">▶</div>
+    <div></div><div class="dp-btn" data-dir="down">▼</div><div></div>
+  </div>
+  <p id="hint">WASD / Arrow Keys · touch d-pad on mobile</p>
+  <button class="btn" id="btn-back">BACK TO MENU</button>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const GRID_W=28,GRID_H=28,CELL=20,TICK_MS=135,FOOD_MAX=7,MAX_P=4;
+const P_COLORS=['#00ff88','#ff4466','#44aaff','#ffaa00'];
+const P_NAMES=['GREEN','RED','BLUE','GOLD'];
+const KEY_DIR={ArrowUp:{x:0,y:-1},w:{x:0,y:-1},ArrowDown:{x:0,y:1},s:{x:0,y:1},ArrowLeft:{x:-1,y:0},a:{x:-1,y:0},ArrowRight:{x:1,y:0},d:{x:1,y:0}};
+
+let peer=null,myId=null,isHost=false,hostConn=null,guestConns=[];
+let gameState=null,gameLoop=null,pendingDir=null,ovShown=false;
+
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+canvas.width=GRID_W*CELL; canvas.height=GRID_H*CELL;
+
+function showScreen(name){['s-main','s-lobby','game-layout'].forEach(id=>{document.getElementById(id).style.display=id===name?'flex':'none';});}
+let notifTimer=null;
+function notify(msg){const el=document.getElementById('notif');el.textContent=msg;el.classList.add('show');clearTimeout(notifTimer);notifTimer=setTimeout(()=>el.classList.remove('show'),2600);}
+function setSt(id,msg,cls=''){const el=document.getElementById(id);el.textContent=msg;el.className='st '+cls;}
+function makePeer(id){return new Promise((res,rej)=>{const p=new Peer(id,{debug:0});p.on('open',()=>res(p));p.on('error',rej);});}
+function randCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
+function allPlayers(){return [{peerId:myId,colorIdx:0,name:P_NAMES[0]},...guestConns.map((c,i)=>({peerId:c.peer,colorIdx:i+1,name:P_NAMES[i+1]}))];};
+function renderLobby(players){const list=document.getElementById('pl-list');list.innerHTML='';players.forEach(p=>{const d=document.createElement('div');d.className='pl-item';d.innerHTML=`<div class="pl-dot" style="background:${P_COLORS[p.colorIdx]}"></div><span style="color:${P_COLORS[p.colorIdx]}">${p.name}</span>${p.peerId===myId?'<span class="pl-you">YOU</span>':''}`;list.appendChild(d);});document.getElementById('pc').textContent=players.length;if(isHost)document.getElementById('btn-start').disabled=players.length<1;}
+function broadcastLobby(){const players=allPlayers();renderLobby(players);guestConns.forEach(c=>trySend(c,{type:'lobby',players}));}
+function trySend(c,m){try{c.send(m);}catch(_){}}
+function isOpp(a,b){return a.x===-b.x&&a.y===-b.y;}
+
+function initState(players){
+  const starts=[{pos:{x:4,y:GRID_H/2|0},dir:{x:1,y:0}},{pos:{x:GRID_W-5,y:GRID_H/2|0},dir:{x:-1,y:0}},{pos:{x:GRID_W/2|0,y:4},dir:{x:0,y:1}},{pos:{x:GRID_W/2|0,y:GRID_H-5},dir:{x:0,y:-1}}];
+  const snakes={};
+  players.forEach((p,i)=>{const s=starts[i];snakes[p.peerId]={peerId:p.peerId,colorIdx:p.colorIdx,body:[s.pos,{x:s.pos.x-s.dir.x,y:s.pos.y-s.dir.y}],dir:s.dir,nextDir:s.dir,alive:true,score:0};});
+  const state={snakes,food:[],tick:0,running:true,winner:null};
+  for(let i=0;i<FOOD_MAX;i++)spawnFood(state);
+  return state;
+}
+
+function spawnFood(state){
+  const occ=new Set();
+  Object.values(state.snakes).forEach(s=>s.body.forEach(c=>occ.add(`${c.x},${c.y}`)));
+  state.food.forEach(f=>occ.add(`${f.x},${f.y}`));
+  for(let t=0;t<40;t++){const x=Math.floor(Math.random()*GRID_W),y=Math.floor(Math.random()*GRID_H);if(!occ.has(`${x},${y}`)){state.food.push({x,y});return;}}
+}
+
+function tick(state){
+  if(!state.running)return;
+  state.tick++;
+  const alive=Object.values(state.snakes).filter(s=>s.alive);
+  alive.forEach(s=>{if(!isOpp(s.nextDir,s.dir))s.dir=s.nextDir;});
+  const newHeads={};
+  alive.forEach(s=>{newHeads[s.peerId]={x:s.body[0].x+s.dir.x,y:s.body[0].y+s.dir.y};});
+  alive.forEach(s=>{const h=newHeads[s.peerId];if(h.x<0||h.x>=GRID_W||h.y<0||h.y>=GRID_H)s.alive=false;});
+  const still=alive.filter(s=>s.alive);
+  const eaters=new Set();
+  still.forEach(s=>{const h=newHeads[s.peerId],fi=state.food.findIndex(f=>f.x===h.x&&f.y===h.y);if(fi!==-1){state.food.splice(fi,1);s.score++;eaters.add(s.peerId);}});
+  const bodyCells=new Set();
+  still.forEach(s=>{const tail=eaters.has(s.peerId)?s.body.length:s.body.length-1;s.body.slice(0,tail).forEach(c=>bodyCells.add(`${c.x},${c.y}`));});
+  still.forEach(s=>{if(!s.alive)return;const h=newHeads[s.peerId];if(bodyCells.has(`${h.x},${h.y}`))s.alive=false;});
+  const headMap={};
+  still.filter(s=>s.alive).forEach(s=>{const k=`${newHeads[s.peerId].x},${newHeads[s.peerId].y}`;if(headMap[k]){s.alive=false;headMap[k].alive=false;}else headMap[k]=s;});
+  still.filter(s=>s.alive).forEach(s=>{s.body.unshift(newHeads[s.peerId]);if(!eaters.has(s.peerId))s.body.pop();});
+  while(state.food.length<FOOD_MAX)spawnFood(state);
+  const rem=Object.values(state.snakes).filter(s=>s.alive),tot=Object.keys(state.snakes).length;
+  if(tot>1&&rem.length<=1){state.running=false;state.winner=rem[0]?.peerId??null;}
+  else if(tot===1&&rem.length===0){state.running=false;state.winner=null;}
+}
+
+function render(state){
+  ctx.fillStyle='#07070e';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='rgba(255,255,255,.025)';
+  for(let x=0;x<GRID_W;x++)for(let y=0;y<GRID_H;y++)ctx.fillRect(x*CELL+CELL/2-1,y*CELL+CELL/2-1,2,2);
+  ctx.shadowColor='#ff4466';ctx.shadowBlur=10;ctx.fillStyle='#ff4466';
+  state.food.forEach(f=>{ctx.beginPath();ctx.arc(f.x*CELL+CELL/2,f.y*CELL+CELL/2,CELL/2-3,0,Math.PI*2);ctx.fill();});
+  ctx.shadowBlur=0;
+  Object.values(state.snakes).forEach(snake=>{
+    const color=P_COLORS[snake.colorIdx];ctx.globalAlpha=snake.alive?1:.25;
+    snake.body.forEach((c,i)=>{const h=i===0;ctx.shadowColor=color;ctx.shadowBlur=h?14:3;ctx.fillStyle=h?color:color+'bb';const p=h?1:2;ctx.fillRect(c.x*CELL+p,c.y*CELL+p,CELL-p*2,CELL-p*2);});
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+  });
+  renderHUD(state);
+}
+
+function renderHUD(state){
+  const hud=document.getElementById('hud');hud.innerHTML='';
+  Object.values(state.snakes).forEach(s=>{const color=P_COLORS[s.colorIdx],d=document.createElement('div');d.className='sc-card';d.style.borderColor=color;d.style.color=color;d.style.opacity=s.alive?1:.35;d.innerHTML=`${P_NAMES[s.colorIdx]}<br>${s.score} pts${s.peerId===myId?'<br><small style="color:#2a2a44">YOU</small>':''}`;hud.appendChild(d);});
+}
+
+function showGameOver(state){
+  if(ovShown)return;ovShown=true;
+  setTimeout(()=>{
+    const ov=document.createElement('div');ov.className='overlay';
+    let inner=state.winner?`<p class="ov-winner" style="color:${P_COLORS[state.snakes[state.winner].colorIdx]}">${P_NAMES[state.snakes[state.winner].colorIdx]} WINS!</p>${state.winner===myId?'<p style="color:#555;margin-bottom:16px">That\'s you!</p>':'<p style="margin-bottom:16px"></p>'}`:`<p class="ov-winner" style="color:#444">DRAW</p><p style="margin-bottom:16px"></p>`;
+    ov.innerHTML=`<div class="ov-box"><h2>GAME OVER</h2>${inner}<button class="btn" id="btn-again">PLAY AGAIN</button></div>`;
+    document.body.appendChild(ov);
+    document.getElementById('btn-again').onclick=()=>{ov.remove();backToLobby();};
+  },700);
+}
+
+function backToLobby(){stopLoop();gameState=null;ovShown=false;pendingDir=null;showScreen('s-lobby');if(isHost)broadcastLobby();}
+function stopLoop(){if(gameLoop){clearInterval(gameLoop);gameLoop=null;}}
+
+function startGame(){
+  const players=allPlayers();gameState=initState(players);ovShown=false;
+  const cd=document.getElementById('countdown');showScreen('game-layout');let n=3;cd.style.display='flex';cd.textContent=n;
+  const ci=setInterval(()=>{n--;if(n>0){cd.textContent=n;return;}cd.style.display='none';clearInterval(ci);
+    guestConns.forEach(c=>trySend(c,{type:'start',state:gameState}));
+    render(gameState);pendingDir=null;
+    gameLoop=setInterval(()=>{
+      if(!gameState?.running)return;
+      if(pendingDir){const s=gameState.snakes[myId];if(s?.alive&&!isOpp(pendingDir,s.dir))s.nextDir=pendingDir;pendingDir=null;}
+      tick(gameState);render(gameState);
+      guestConns.forEach(c=>trySend(c,{type:'state',state:gameState}));
+      if(!gameState.running){stopLoop();showGameOver(gameState);}
+    },TICK_MS);
+  },900);
+}
+
+document.addEventListener('keydown',e=>{
+  const dir=KEY_DIR[e.key];if(!dir)return;e.preventDefault();
+  if(!gameState)return;const s=gameState.snakes[myId];if(!s?.alive)return;
+  if(isHost){if(!isOpp(dir,s.dir))pendingDir=dir;}else{if(!isOpp(dir,s.dir))hostConn?.send({type:'dir',dir});}
+});
+
+document.querySelectorAll('.dp-btn').forEach(btn=>{
+  const dm={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+  const fire=()=>{const dir=dm[btn.dataset.dir];if(!dir||!gameState)return;const s=gameState.snakes[myId];if(!s?.alive)return;if(isHost){if(!isOpp(dir,s.dir))pendingDir=dir;}else{if(!isOpp(dir,s.dir))hostConn?.send({type:'dir',dir});}};
+  btn.addEventListener('touchstart',e=>{e.preventDefault();fire();},{passive:false});
+  btn.addEventListener('mousedown',fire);
+});
+
+window.addEventListener('touchstart',()=>document.getElementById('dpad').style.display='grid',{once:true});
+
+async function hostGame(){
+  let attempts=0;
+  while(attempts<3){const code=randCode();try{peer=await makePeer(code);break;}catch(err){if(err?.type==='unavailable-id'){attempts++;continue;}notify('Could not connect to relay server.');return;}}
+  if(!peer){notify('Failed to get a room code. Try again.');return;}
+  myId=peer.id;isHost=true;guestConns=[];
+  showScreen('s-lobby');document.getElementById('rc-display').textContent=peer.id;
+  setSt('st-lobby','Waiting for players to join…');renderLobby(allPlayers());
+  peer.on('connection',conn=>{
+    if(guestConns.length>=MAX_P-1){trySend(conn,{type:'full'});conn.close();return;}
+    conn.on('open',()=>{
+      guestConns.push(conn);broadcastLobby();notify(`Player joined (${P_NAMES[guestConns.length]} slot)`);
+      conn.on('data',data=>{if(data.type==='dir'&&gameState){const s=gameState.snakes[conn.peer];if(s?.alive&&!isOpp(data.dir,s.dir))s.nextDir=data.dir;}});
+      conn.on('close',()=>{guestConns=guestConns.filter(c=>c!==conn);if(gameState?.snakes[conn.peer])gameState.snakes[conn.peer].alive=false;broadcastLobby();notify('A player disconnected');});
+    });
+  });
+  peer.on('error',err=>notify('Host error: '+err.message));
+}
+
+async function joinGame(code){
+  const gid='g'+Math.random().toString(36).substr(2,9);
+  try{peer=await makePeer(gid);}catch(err){setSt('st-join','Peer init failed: '+err.message,'err');return;}
+  myId=peer.id;isHost=false;setSt('st-join','Connecting…');
+  hostConn=peer.connect(code,{reliable:true});
+  const timeout=setTimeout(()=>{if(!hostConn.open)setSt('st-join','Timed out. Check the room code.','err');},10000);
+  hostConn.on('open',()=>{clearTimeout(timeout);setSt('st-join','');showScreen('s-lobby');document.getElementById('rc-display').textContent=code;document.getElementById('btn-start').style.display='none';setSt('st-lobby','Connected! Waiting for host to start…','ok');});
+  hostConn.on('data',data=>{
+    if(data.type==='full'){setSt('st-join','Room is full.','err');peer.destroy();return;}
+    if(data.type==='lobby'){renderLobby(data.players);}
+    else if(data.type==='start'){
+      gameState=data.state;ovShown=false;pendingDir=null;
+      const cd=document.getElementById('countdown');showScreen('game-layout');let n=3;cd.style.display='flex';cd.textContent=n;
+      const ci=setInterval(()=>{n--;if(n>0){cd.textContent=n;return;}cd.style.display='none';clearInterval(ci);if(gameState)render(gameState);},900);
+    }else if(data.type==='state'){gameState=data.state;render(gameState);if(!gameState.running&&!ovShown)showGameOver(gameState);}
+  });
+  hostConn.on('close',()=>{notify('Disconnected from host');resetToMain();});
+  hostConn.on('error',e=>setSt('st-join','Error: '+e.message,'err'));
+}
+
+function resetToMain(){
+  stopLoop();gameState=null;ovShown=false;pendingDir=null;
+  if(peer){peer.destroy();peer=null;}
+  hostConn=null;guestConns=[];myId=null;isHost=false;
+  document.getElementById('btn-start').style.display='';document.getElementById('btn-start').disabled=true;
+  document.getElementById('inp-code').value='';setSt('st-join','');showScreen('s-main');
+}
+
+document.getElementById('btn-host').onclick=()=>hostGame();
+document.getElementById('btn-join-toggle').onclick=()=>{const p=document.getElementById('join-panel');p.style.display=p.style.display==='none'?'block':'none';};
+document.getElementById('btn-join').onclick=()=>{const code=document.getElementById('inp-code').value.trim().toUpperCase();if(code.length<4){setSt('st-join','Enter a valid room code','err');return;}joinGame(code);};
+document.getElementById('inp-code').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btn-join').click();});
+document.getElementById('rc-display').onclick=()=>{navigator.clipboard?.writeText(document.getElementById('rc-display').textContent).then(()=>notify('Room code copied!')).catch(()=>{});};
+document.getElementById('btn-start').onclick=()=>startGame();
+document.getElementById('btn-leave').onclick=()=>resetToMain();
+document.getElementById('btn-back').onclick=()=>resetToMain();
+</script>
+</body>
+</html>
