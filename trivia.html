@@ -262,7 +262,7 @@ function submitAnswer(i,btn,qData){
 
 // ── Host Game Logic ──
 let pendingAnswers={};
-let answerTimeout=null;
+let answerTimeout=null,runQTimeout=null;
 
 function processHostAnswer(choice,ms){
   pendingAnswers[myId]={choice,ms};
@@ -316,7 +316,7 @@ function startQuiz(){
   scores={};playerMeta={};
   allPlayers().forEach(p=>{scores[p.peerId]=0;playerMeta[p.peerId]={colorIdx:p.colorIdx};});
   showScreen('game-layout');renderLeaderboard();
-  broadcast({type:'quiz-start',questions:gameQuestions});
+  broadcast({type:'quiz-start',questions:gameQuestions,playerMeta});
   runQuestion(0);
 }
 
@@ -333,7 +333,8 @@ function runQuestion(idx){
     revealAnswer();
   },Q_TIME);
   // Next question after reveal delay
-  setTimeout(()=>runQuestion(idx+1),(Q_TIME+3500));
+  clearTimeout(runQTimeout);
+  runQTimeout=setTimeout(()=>runQuestion(idx+1),(Q_TIME+3500));
 }
 
 function endQuiz(){
@@ -358,7 +359,7 @@ function showFinalResults(winnerId,winPts,winMeta){
 }
 
 function backToLobby(){
-  clearTimeout(answerTimeout);clearInterval(timerAnim);
+  clearTimeout(answerTimeout);clearTimeout(runQTimeout);clearInterval(timerAnim);
   showScreen('s-lobby');if(isHost)broadcastLobby();
 }
 
@@ -397,7 +398,10 @@ async function joinGame(code){
     if(data.type==='full'){setSt('st-join','Room is full.','err');peer.destroy();return;}
     if(data.type==='lobby'){renderLobby(data.players);}
     else if(data.type==='quiz-start'){
-      gameQuestions=data.questions;scores={};playerMeta={};
+      gameQuestions=data.questions;scores={};
+      playerMeta=data.playerMeta||{};
+      // Ensure own entry exists
+      if(!playerMeta[myId])playerMeta[myId]={colorIdx:1};
       showScreen('game-layout');renderLeaderboard();
     }
     else if(data.type==='question'){
@@ -419,7 +423,7 @@ async function joinGame(code){
 }
 
 function resetToMain(){
-  clearTimeout(answerTimeout);clearInterval(timerAnim);
+  clearTimeout(answerTimeout);clearTimeout(runQTimeout);clearInterval(timerAnim);
   if(peer){peer.destroy();peer=null;}
   hostConn=null;guestConns=[];myId=null;isHost=false;currentQ=null;
   document.getElementById('btn-start').style.display='';document.getElementById('btn-start').disabled=true;

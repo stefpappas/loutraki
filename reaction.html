@@ -182,7 +182,7 @@ function setStatus(msg){document.getElementById('status-msg').textContent=msg;}
 
 // ── Press handling ──
 function handlePress(){
-  if(gamePhase==='wait'){
+  if(gamePhase==='waiting'){
     // False start!
     gamePhase='false';
     setStatus('⚠ FALSE START!');
@@ -194,14 +194,15 @@ function handlePress(){
     return;
   }
   if(gamePhase!=='flash')return;
+  // Use host-side clock for reaction time (avoids cross-device clock skew)
   const ms=Date.now()-flashTime;
-  setStatus(`You pressed in ${ms}ms!`);
+  setStatus(`Pressed in ${ms}ms!`);
   document.getElementById('press-btn').disabled=true;
   if(isHost){
-    if(!presses[myId])presses[myId]={ts:flashTime+ms,ms};
+    if(!presses[myId])presses[myId]={ms};
     checkAllPressed();
   }else{
-    hostConn?.send({type:'press',ts:Date.now(),ms,falseStart:false});
+    hostConn?.send({type:'press',falseStart:false});
   }
 }
 
@@ -350,7 +351,7 @@ async function hostGame(){
       conn.on('data',data=>{
         if(data.type==='press'&&gamePhase==='flash'&&!presses[conn.peer]){
           if(data.falseStart){falseStarters.add(conn.peer);}
-          else{presses[conn.peer]={ms:data.ms};checkAllPressed();}
+          else{presses[conn.peer]={ms:Date.now()-flashTime};checkAllPressed();}
         }else if(data.type==='press'&&data.falseStart){
           falseStarters.add(conn.peer);
         }

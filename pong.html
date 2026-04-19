@@ -142,7 +142,7 @@ function renderLobby(players){
     list.appendChild(d);
   });
   document.getElementById('pc').textContent=players.length;
-  if(isHost)document.getElementById('btn-start').disabled=players.length<2;
+  if(isHost)document.getElementById('btn-start').disabled=players.length<1;
 }
 
 // ── Game Logic ──
@@ -261,10 +261,16 @@ function startGame(){
   render(gameState);
   gameLoop=setInterval(()=>{
     if(!gameState?.running)return;
-    // Get host paddle dir from keys
+    // Host (left) paddle
     hostPaddleDir=0;
     if(keysDown.has('ArrowUp')||keysDown.has('w'))hostPaddleDir=-1;
     if(keysDown.has('ArrowDown')||keysDown.has('s'))hostPaddleDir=1;
+    // Simple AI for right paddle when no guest
+    if(!guestConn){
+      const pc=gameState.rPaddle.y+PH/2;
+      const diff=gameState.ball.y-pc;
+      guestPaddleDir=Math.abs(diff)>12?(diff>0?1:-1):0;
+    }
     tickGame(gameState,hostPaddleDir,guestPaddleDir);
     render(gameState);
     if(guestConn)trySend(guestConn,{type:'state',state:gameState});
